@@ -4,4 +4,4 @@ A hardware implementation of the classic Bop It! game.
 
 ## Schematic
 
-![A schematic of the breadboard](assets/breadboard.png)
+![A schematic of the breadboard](assets/Bop It_bb.png)
