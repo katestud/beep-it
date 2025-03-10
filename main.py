@@ -1,94 +1,127 @@
-from machine import I2C,Pin, ADC
+from machine import I2C, Pin, ADC
 import time
 from imu import MPU6050
 import math
 
+# Pin Definitions
 TOUCH_PIN = 15
 MPU_SDA_PIN = 2
 MPU_SCL_PIN = 3
-
-# This is important, as we want to connect to one of the analog to digital
-# converter pins. See https://microcontrollerslab.com/joystick-module-raspberry-pi-pico/
-# Joystick can also measure button click on the SW pin, but we don't need that
-# for the Bop It Game.
+SLIDING_POTENTIOMETER_PIN = 28
 JOYSTICK_X_PIN = 27
 JOYSTICK_Y_PIN = 26
 
-######### TOUCH SENSOR #########
-# # Make sure this is attached to 3.3V instead of 5V to avoid damaging the board
-TOUCH_SENSOR = Pin(TOUCH_PIN, Pin.IN)
+class GameState:
+    def __init__(self):
+        self.is_game_on = False
+        self.score = 0
+        self.last_action_time = 0
+        self.current_action = None
 
-def is_touched():
-    if TOUCH_SENSOR.value():
-        return True
-    return False
-######### TOUCH SENSOR #########
+    def start_game(self):
+        self.is_game_on = True
+        self.score = 0
+        self.last_action_time = time.time()
 
-######### SHAKE DETECTOR #########
-# Make sure to wire the SDA and SCL pins according to whether we're using I2C0 or I2C1
-I2C_SENSOR=I2C(1, sda=Pin(MPU_SDA_PIN), scl=Pin(MPU_SCL_PIN), freq=400000)
+    def stop_game(self):
+        self.is_game_on = False
+        print(f"Game ended! Final score: {self.score}")
 
-# Debugging to make sure the wiring is set up correctly
-print("Scanning for I2C devices...")
-devices = I2C_SENSOR.scan()
+class InputManager:
+    def __init__(self):
+        # Touch Sensor Setup
+        self.touch_sensor = Pin(TOUCH_PIN, Pin.IN)
 
-if devices:
-    print(f"Found devices at: {[hex(device) for device in devices]}")
-else:
-    print("No I2C devices found. Check wiring!")
+        # IMU Setup
+        self.i2c_sensor = I2C(1, sda=Pin(MPU_SDA_PIN), scl=Pin(MPU_SCL_PIN), freq=400000)
+        self.mpu_sensor = MPU6050(self.i2c_sensor)
 
-MPU_SENSOR = MPU6050(I2C_SENSOR)
+        # Joystick Setup
+        self.vrx = ADC(Pin(JOYSTICK_X_PIN))
+        self.vry = ADC(Pin(JOYSTICK_Y_PIN))
+        self.joystick_x_position = self.vrx.read_u16()
+        self.joystick_y_position = self.vry.read_u16()
 
-# Assuming mpu is already initialized
-def is_shaking(threshold=2.0):
-    xAccel = MPU_SENSOR.accel.x
-    yAccel = MPU_SENSOR.accel.y
-    zAccel = MPU_SENSOR.accel.z
+        # Slider Setup
+        self.slider_sensor = ADC(Pin(SLIDING_POTENTIOMETER_PIN))
+        self.slider_value = self.slider_sensor.read_u16()
 
-    # Calculate the overall acceleration magnitude
-    accel_magnitude = math.sqrt(xAccel**2 + yAccel**2 + zAccel**2)
+    def is_touched(self):
+        return self.touch_sensor.value()
 
-    # Compare to a threshold (2g is a good starting point)
-    if accel_magnitude > threshold:
-        return True
-    return False
-######### SHAKE DETECTOR #########
+    def is_shaking(self, threshold=2.0):
+        xAccel = self.mpu_sensor.accel.x
+        yAccel = self.mpu_sensor.accel.y
+        zAccel = self.mpu_sensor.accel.z
+        accel_magnitude = math.sqrt(xAccel**2 + yAccel**2 + zAccel**2)
+        return accel_magnitude > threshold
 
-######### JOYSTICK DETECTOR #########
-VRX = ADC(Pin(JOYSTICK_X_PIN))
-VRY = ADC(Pin(JOYSTICK_Y_PIN))
+    def is_joystick_moved(self, threshold=1000):
+        x_axis = self.vrx.read_u16()
+        y_axis = self.vry.read_u16()
 
-def is_joystick_moved(x_last, y_last, threshold=1000):
-    """Detect if the joystick position has changed beyond a threshold."""
-    x_axis = VRX.read_u16()
-    y_axis = VRY.read_u16()
+        x_moved = abs(x_axis - self.joystick_x_position) > threshold
+        y_moved = abs(y_axis - self.joystick_y_position) > threshold
 
-    # Check if the movement exceeds the threshold
-    x_moved = abs(x_axis - x_last) > threshold
-    y_moved = abs(y_axis - y_last) > threshold
+        if x_moved or y_moved:
+            self.joystick_x_position = x_axis
+            self.joystick_y_position = y_axis
+            return True, x_axis, y_axis
+        return False, x_axis, y_axis
 
-    return x_moved or y_moved, x_axis, y_axis
+    def is_slider_moved(self, threshold=500):
+        current_value = self.slider_sensor.read_u16()
+        if abs(current_value - self.slider_value) > threshold:
+            self.slider_value = current_value
+            return True, current_value
+        return False, current_value
 
-x_last = VRX.read_u16()
-y_last = VRY.read_u16()
+def main():
+    game_state = GameState()
+    input_manager = InputManager()
 
-######### JOYSTICK DETECTOR #########
+    # Debug I2C devices
+    print("Scanning for I2C devices...")
+    devices = input_manager.i2c_sensor.scan()
+    if devices:
+        print(f"Found devices at: {[hex(device) for device in devices]}")
+    else:
+        print("No I2C devices found. Check wiring!")
 
+    while True:
+        # Simple state machine for game on/off
+        if not game_state.is_game_on:
+            # Check for game start condition (placeholder)
+            if input_manager.is_touched():
+                print("Starting game!")
+                game_state.start_game()
+            time.sleep(0.1)
+            continue
 
-######### PRINT DETECTED VALUES #########
+        # Game is running
+        if input_manager.is_shaking():
+            print("Device is shaking!")
+            game_state.score += 1
 
-while True:
-    if is_shaking():
-        print("Device is shaking!")
-    if is_touched():
-        print("Touch detected!")
+        if input_manager.is_touched():
+            print("Touch detected!")
+            game_state.score += 1
 
-    # Check if the joystick has moved
-    moved, xAxis, yAxis = is_joystick_moved(x_last, y_last)
-    if moved:
-        print(f"Joystick moved! X: {xAxis}, Y: {yAxis}")
-        # Update last known position
-        x_last = xAxis
-        y_last = yAxis
-    time.sleep(0.1)
-######### PRINT DETECTED VALUES #########
+        joystick_moved, x_axis, y_axis = input_manager.is_joystick_moved()
+        if joystick_moved:
+            print(f"Joystick moved! X: {x_axis}, Y: {y_axis}")
+            game_state.score += 1
+
+        slider_moved, current_value = input_manager.is_slider_moved()
+        if slider_moved:
+            print(f"Slider moved! Current value: {current_value}")
+            game_state.score += 1
+
+        # Check for game end condition (placeholder)
+        if game_state.score >= 10:  # Example end condition
+            game_state.stop_game()
+
+        time.sleep(0.1)
+
+if __name__ == "__main__":
+    main()
