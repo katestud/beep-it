@@ -1,3 +1,5 @@
+# Borrowed from https://github.com/dhylands/python_lcd/blob/4294eed8ce340b7b87343775617ce929ce1de124/lcd/lcd_api.py
+
 """Provides an API for talking to HD44780 compatible character LCDs."""
 
 import time

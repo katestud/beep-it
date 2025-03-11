@@ -1,3 +1,5 @@
+# Borrowed from https://github.com/Fattelodasolo/MicroPython/blob/d125cdb124c8ce78970c8cfc9c1deaf804068efc/LCD%20I2C/i2c_lcd.py
+
 import utime
 import gc
 
