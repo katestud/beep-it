@@ -1,4 +1,5 @@
 from machine import I2C, Pin, ADC
+from i2c_lcd import I2cLcd
 import time
 from imu import MPU6050
 import math
@@ -8,9 +9,16 @@ import random
 TOUCH_PIN = 15
 MPU_SDA_PIN = 2
 MPU_SCL_PIN = 3
+LCD_SDA_PIN = 4
+LCD_SCL_PIN = 5
 SLIDING_POTENTIOMETER_PIN = 28
 JOYSTICK_X_PIN = 27
 JOYSTICK_Y_PIN = 26
+
+# LCD I2C Settings
+LCD_I2C_ADDR = 0x27
+LCD_I2C_NUM_ROWS = 2
+LCD_I2C_NUM_COLS = 16
 
 # Debounce settings (in seconds)
 DEBOUNCE_TIME = 0.5
@@ -68,6 +76,8 @@ class GameState:
         self.last_prompt_time = time.time()
         # Reset debounce timers when generating a new action
         if self.input_manager:
+            self.input_manager.lcd_display.clear()
+            self.input_manager.lcd_display.putstr(self.current_action)
             self.input_manager.reset_debounce_timers()
 
     def check_action(self, action_type):
@@ -89,7 +99,6 @@ class GameState:
 
     def handle_wrong_action(self, action):
         print(f"Wrong action: {action}! Try again!")
-
 class InputManager:
     def __init__(self):
         # Touch Sensor Setup
@@ -98,10 +107,14 @@ class InputManager:
         self.last_touch_state = False
 
         # IMU Setup
-        self.i2c_sensor = I2C(1, sda=Pin(MPU_SDA_PIN), scl=Pin(MPU_SCL_PIN), freq=400000)
-        self.mpu_sensor = MPU6050(self.i2c_sensor)
+        self.i2c1_sensor = I2C(1, sda=Pin(MPU_SDA_PIN), scl=Pin(MPU_SCL_PIN), freq=400000)
+        self.mpu_sensor = MPU6050(self.i2c1_sensor)
         self.last_shake_time = 0
         self.shake_detected = False
+
+        # LCD Setup
+        self.i2c0_sensor = I2C(0, sda=Pin(LCD_SDA_PIN), scl=Pin(LCD_SCL_PIN), freq=400000)
+        self.lcd_display = I2cLcd(self.i2c0_sensor, LCD_I2C_ADDR, LCD_I2C_NUM_ROWS, LCD_I2C_NUM_COLS)
 
         # Joystick Setup
         self.vrx = ADC(Pin(JOYSTICK_X_PIN))
@@ -275,15 +288,25 @@ class InputManager:
 def main():
     game_state = GameState()
     input_manager = InputManager()
-    game_state.input_manager = input_manager  # Set the input manager reference
+    game_state.input_manager = input_manager  # type: ignore
 
     # Debug I2C devices
     print("Scanning for I2C devices...")
-    devices = input_manager.i2c_sensor.scan()
+    devices = input_manager.i2c1_sensor.scan()
     if devices:
-        print(f"Found devices at: {[hex(device) for device in devices]}")
+        print(f"Found I2C1 devices at: {[hex(device) for device in devices]}")
     else:
-        print("No I2C devices found. Check wiring!")
+        print("No I2C1 devices found. Check wiring!")
+
+    devices = input_manager.i2c0_sensor.scan()
+    if devices:
+        print(f"Found I2C0 devices at: {[hex(device) for device in devices]}")
+    else:
+        print("No I2C0 devices found")
+
+    input_manager.lcd_display.putstr("Hello, World!")
+    input_manager.lcd_display.clear()
+    input_manager.lcd_display.putstr("Bop It! Press to start")
 
     while True:
         # Simple state machine for game on/off
@@ -291,8 +314,10 @@ def main():
             # Check for game start condition (placeholder)
             if input_manager.is_touched(current_action=None):  # Pass None since we're not in a game action yet
                 print("Starting game!")
+                input_manager.lcd_display.clear()
+                input_manager.lcd_display.putstr("Starting game!")
                 game_state.start_game()
-            time.sleep(0.1)
+            time.sleep(1)
             continue
 
         # Game is running
