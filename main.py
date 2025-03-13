@@ -1,9 +1,10 @@
-from machine import I2C, Pin, ADC
+from machine import I2C, Pin, ADC, PWM
 from i2c_lcd import I2cLcd
 import time
 from imu import MPU6050
 import math
 import random
+from tones import TONES
 
 # Pin Definitions
 TOUCH_PIN = 15
@@ -14,6 +15,7 @@ LCD_SCL_PIN = 5
 SLIDING_POTENTIOMETER_PIN = 28
 JOYSTICK_X_PIN = 27
 JOYSTICK_Y_PIN = 26
+BUZZER_PIN = 13
 
 # LCD I2C Settings
 LCD_I2C_ADDR = 0x27
@@ -130,6 +132,9 @@ class InputManager:
         # LCD Setup
         self.i2c0_sensor = I2C(0, sda=Pin(LCD_SDA_PIN), scl=Pin(LCD_SCL_PIN), freq=400000)
         self.lcd_display = I2cLcd(self.i2c0_sensor, LCD_I2C_ADDR, LCD_I2C_NUM_ROWS, LCD_I2C_NUM_COLS)
+
+        # Buzzer Setup
+        self.buzzer = PWM(Pin(BUZZER_PIN))
 
         # Joystick Setup
         self.vrx = ADC(Pin(JOYSTICK_X_PIN))
@@ -278,6 +283,23 @@ class InputManager:
 
         return False, current_value
 
+def playtone(buzzer, frequency):
+    buzzer.duty_u16(1000)
+    buzzer.freq(frequency)
+
+def bequiet(buzzer):
+    buzzer.duty_u16(0)
+
+def playsong(buzzer, song):
+    for i in range(len(song)):
+      if (song[i] == "P"):
+          bequiet(buzzer)
+      else:
+          playtone(buzzer, TONES[song[i]])
+      time.sleep(0.3)
+      bequiet(buzzer)
+
+
 def main():
     game_state = GameState()
     input_manager = InputManager()
@@ -301,6 +323,9 @@ def main():
 
     input_manager.lcd_display.backlight_on()
     input_manager.lcd_display.putstr("Bop It! Press to start")
+    song = ["E4", "G4", "C5", "D5", "E5", "G5", "E5", "C5", "A4"]
+
+    playsong(input_manager.buzzer, song)
 
     while True:
         # Simple state machine for game on/off
