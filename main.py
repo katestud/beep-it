@@ -27,7 +27,10 @@ SLIDER_DEBOUNCE = 0.3
 JOYSTICK_DEBOUNCE = 0.4
 
 # Debug mode
-DEBUG = True
+DEBUG = False
+
+# Prototype mode (when shake doesn't really work)
+PROTOTYPE_MODE = True
 
 # Slider settings
 SLIDER_THRESHOLD = 1000  # Minimum change to detect movement
@@ -43,6 +46,8 @@ class GameAction:
     @classmethod
     def get_random_action(cls):
         actions = [cls.TOUCH, cls.FLICK, cls.SHAKE, cls.SLIDE]
+        if PROTOTYPE_MODE:
+            actions.remove(cls.SHAKE)
         return random.choice(actions)
 
 class GameState:
@@ -53,7 +58,7 @@ class GameState:
         self.current_action = None
         self.action_timeout = 3.0  # seconds to complete the action
         self.last_prompt_time = 0
-        self.prompt_interval = 2.0  # seconds between prompts
+        self.prompt_interval = 5.0  # seconds between prompts
         self.input_manager = None  # Will be set when game starts
 
     def start_game(self):
@@ -67,6 +72,11 @@ class GameState:
 
     def stop_game(self):
         self.is_game_on = False
+        if self.input_manager:
+          self.input_manager.lcd_display.clear()
+          self.input_manager.lcd_display.putstr(f"Final score: {self.score}")
+          self.input_manager.lcd_display.move_to(0, 1)
+          self.input_manager.lcd_display.putstr("Press to start")
         print(f"\nGame ended! Final score: {self.score}")
 
     def generate_new_action(self):
@@ -95,6 +105,11 @@ class GameState:
     def handle_correct_action(self):
         self.score += 1
         print(f"Correct! Score: {self.score}")
+        if self.input_manager:
+            self.input_manager.lcd_display.clear()
+            self.input_manager.lcd_display.putstr(f"Correct! Score: {self.score}")
+            time.sleep(0.5)
+
         self.generate_new_action()
 
     def handle_wrong_action(self, action):
@@ -152,14 +167,9 @@ class InputManager:
         self.joystick_y_position = self.vry.read_u16()
         self.last_touch_state = False
 
-    def is_touched(self, current_action=None):
+    def is_touched(self):
         current_time = time.time()
         current_state = self.touch_sensor.value()
-
-        # Only check current_action if we're in a game
-        if current_action is not None and current_action != GameAction.TOUCH:
-            self.last_touch_state = current_state
-            return False
 
         # Only trigger on rising edge (touch start) and after debounce
         if current_state and not self.last_touch_state and (current_time - self.last_touch_time) > DEBOUNCE_TIME:
@@ -171,14 +181,9 @@ class InputManager:
 
         return False
 
-    def is_shaking(self, threshold=2.0, current_action=None):
+    def is_shaking(self, threshold=2.0):
         current_time = time.time()
         if current_time - self.last_shake_time < SHAKE_DEBOUNCE:
-            return False
-
-        # If the action has changed, reset the detection to prevent false triggers
-        if current_action != GameAction.SHAKE:
-            self.shake_detected = False
             return False
 
         xAccel = self.mpu_sensor.accel.x
@@ -195,16 +200,9 @@ class InputManager:
 
         return False
 
-    def is_joystick_moved(self, threshold=1000, current_action=None):
+    def is_joystick_moved(self, threshold=1000):
         current_time = time.time()
         if current_time - self.last_joystick_time < JOYSTICK_DEBOUNCE:
-            return False, self.joystick_x_position, self.joystick_y_position
-
-        # If the action has changed, update positions to prevent false triggers
-        if current_action != GameAction.FLICK:
-            self.joystick_x_position = self.vrx.read_u16()
-            self.joystick_y_position = self.vry.read_u16()
-            self.joystick_detected = False
             return False, self.joystick_x_position, self.joystick_y_position
 
         x_axis = self.vrx.read_u16()
@@ -224,18 +222,13 @@ class InputManager:
 
         return False, x_axis, y_axis
 
-    def is_slider_moved(self, threshold=SLIDER_THRESHOLD, current_action=None):
+    def is_slider_moved(self, threshold=SLIDER_THRESHOLD):
         current_time = time.time()
         if current_time - self.last_slider_time < SLIDER_DEBOUNCE:
             return False, self.slider_value
 
         current_value = self.slider_sensor.read_u16()
         diff = current_value - self.slider_value
-
-        # If the action has changed, update the last value to prevent false triggers
-        if current_action != GameAction.SLIDE:
-            self.slider_value = current_value
-            return False, current_value
 
         # Determine direction of movement
         if diff > SLIDER_MIN_MOVEMENT:
@@ -256,12 +249,12 @@ class InputManager:
             self.slider_direction = 0
 
         # Only print debug info if we're expecting a slide action
-        if DEBUG and current_action == GameAction.SLIDE:
+        if DEBUG:
             print(f"Slider current: {current_value}, last: {self.slider_value}, diff: {diff}, cumulative: {self.slider_cumulative}")
 
         # Check for full slide
         if abs(diff) > threshold and not self.slider_detected:
-            if DEBUG and current_action == GameAction.SLIDE:
+            if DEBUG:
                 print(f"Full slider movement detected! Threshold: {threshold}")
             self.slider_value = current_value
             self.last_slider_time = current_time
@@ -270,7 +263,7 @@ class InputManager:
             return True, current_value
         # Check for partial slide
         elif self.slider_cumulative > SLIDER_PARTIAL_THRESHOLD and not self.slider_detected:
-            if DEBUG and current_action == GameAction.SLIDE:
+            if DEBUG:
                 print(f"Partial slider movement detected! Cumulative: {self.slider_cumulative}")
             self.slider_value = current_value
             self.last_slider_time = current_time
@@ -290,6 +283,8 @@ def main():
     input_manager = InputManager()
     game_state.input_manager = input_manager  # type: ignore
 
+    time.sleep(2)
+
     # Debug I2C devices
     print("Scanning for I2C devices...")
     devices = input_manager.i2c1_sensor.scan()
@@ -304,15 +299,14 @@ def main():
     else:
         print("No I2C0 devices found")
 
-    input_manager.lcd_display.putstr("Hello, World!")
-    input_manager.lcd_display.clear()
+    input_manager.lcd_display.backlight_on()
     input_manager.lcd_display.putstr("Bop It! Press to start")
 
     while True:
         # Simple state machine for game on/off
         if not game_state.is_game_on:
             # Check for game start condition (placeholder)
-            if input_manager.is_touched(current_action=None):  # Pass None since we're not in a game action yet
+            if input_manager.is_touched():
                 print("Starting game!")
                 input_manager.lcd_display.clear()
                 input_manager.lcd_display.putstr("Starting game!")
@@ -328,27 +322,31 @@ def main():
             game_state.generate_new_action()
 
         # Check inputs and validate against current action
-        if input_manager.is_touched(current_action=game_state.current_action):
+        if input_manager.is_touched():
+            print("Touch detected!")
             if game_state.check_action(GameAction.TOUCH):
                 game_state.handle_correct_action()
             else:
                 game_state.handle_wrong_action("touch")
 
-        if input_manager.is_shaking(current_action=game_state.current_action):
+        if input_manager.is_shaking():
+            print("Shake detected!")
             if game_state.check_action(GameAction.SHAKE):
                 game_state.handle_correct_action()
             else:
                 game_state.handle_wrong_action("shake")
 
-        joystick_moved, x_axis, y_axis = input_manager.is_joystick_moved(current_action=game_state.current_action)
+        joystick_moved, x_axis, y_axis = input_manager.is_joystick_moved()
         if joystick_moved:
+            print("Joystick detected!")
             if game_state.check_action(GameAction.FLICK):
                 game_state.handle_correct_action()
             else:
                 game_state.handle_wrong_action("flick")
 
-        slider_moved, current_value = input_manager.is_slider_moved(current_action=game_state.current_action)
+        slider_moved, current_value = input_manager.is_slider_moved()
         if slider_moved:
+            print("Slider detected!")
             if game_state.check_action(GameAction.SLIDE):
                 game_state.handle_correct_action()
             else:
