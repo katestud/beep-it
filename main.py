@@ -32,7 +32,7 @@ JOYSTICK_DEBOUNCE = 0.4
 DEBUG = False
 
 # Prototype mode (when shake doesn't really work)
-PROTOTYPE_MODE = True
+PROTOTYPE_MODE = False
 
 # Slider settings
 SLIDER_THRESHOLD = 1000  # Minimum change to detect movement
