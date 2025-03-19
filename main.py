@@ -40,10 +40,10 @@ SLIDER_PARTIAL_THRESHOLD = 500  # Minimum change for partial slide
 SLIDER_MIN_MOVEMENT = 100  # Minimum movement in one direction to count
 
 class GameAction:
-    TOUCH = "Beep it!"
-    FLICK = "Flick it!"
-    SHAKE = "Shake it!"
-    SLIDE = "Slide it!"
+    TOUCH = "BEEP IT!"
+    FLICK = "FLICK IT!"
+    SHAKE = "SHAKE IT!"
+    SLIDE = "SLIDE IT!"
 
     @classmethod
     def get_random_action(cls):
@@ -56,6 +56,7 @@ class GameState:
     def __init__(self):
         self.is_game_on = False
         self.score = 0
+        self.mistakes = 0
         self.last_action_time = 0
         self.current_action = None
         self.action_timeout = 3.0  # seconds to complete the action
@@ -66,6 +67,7 @@ class GameState:
     def start_game(self):
         self.is_game_on = True
         self.score = 0
+        self.mistakes = 0
         self.last_action_time = time.time()
         self.current_action = None
         print("\nWelcome to Beep It!")
@@ -78,7 +80,7 @@ class GameState:
           self.input_manager.lcd_display.clear()
           self.input_manager.lcd_display.putstr(f"Final score: {self.score}")
           self.input_manager.lcd_display.move_to(0, 1)
-          self.input_manager.lcd_display.putstr("Press to start")
+          self.input_manager.lcd_display.putstr("Beep to start")
         print(f"\nGame ended! Final score: {self.score}")
 
     def generate_new_action(self):
@@ -117,8 +119,14 @@ class GameState:
         self.generate_new_action()
 
     def handle_wrong_action(self, action):
+        self.mistakes += 1
         print(f"Wrong action: {action}! Try again!")
         if self.input_manager:
+            self.input_manager.lcd_display.clear()
+            self.input_manager.lcd_display.putstr(f"Wrong action: {action}! Try again!")
+            time.sleep(0.5)
+            self.input_manager.lcd_display.clear()
+            self.input_manager.lcd_display.putstr(self.current_action)
             sounds.playsong(self.input_manager.buzzer, "FAILURE")
 class InputManager:
     def __init__(self):
@@ -363,8 +371,7 @@ def main():
             else:
                 game_state.handle_wrong_action("slide")
 
-        # Check for game end condition (placeholder)
-        if game_state.score >= 10:  # Example end condition
+        if game_state.mistakes >= 3:
             game_state.stop_game()
 
         time.sleep(0.1)
