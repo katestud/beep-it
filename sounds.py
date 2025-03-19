@@ -1,5 +1,8 @@
 import time
 
+# For when working in public space
+DISABLE_SOUND = True
+
 TONES = {
   "B0": 31,
   "C1": 33,
@@ -93,10 +96,10 @@ TONES = {
 }
 
 INSTRUCTION_TONES = {
-  "Beep it!": ["G6", "C4"],
-  "Flick it!": [("G4", "D5", 0.2)],
-  "Shake it!": ["E5", "C5", "G4"],
-  "Slide it!": [("D4", "A4", 0.3)],
+  "BEEP IT!": ["G6", "C4"],
+  "FLICK IT!": [("G4", "D5", 0.2)],
+  "SHAKE IT!": ["E5", "C5", "G4"],
+  "SLIDE IT!": [("D4", "A4", 0.3)],
   "GAME_START": ["C5", "G4", "E4", "A4", "B4", "G4"],
   "SUCCESS": [("DS5", "D6", 0.3)],
   "FAILURE": [("D6", 'DS3', 0.3)]
@@ -124,6 +127,8 @@ def bequiet(buzzer):
     buzzer.duty_u16(0)
 
 def playsong(buzzer, song_name):
+    if DISABLE_SOUND:
+        return
     song = INSTRUCTION_TONES[song_name]
     for note in song:
         if isinstance(note, tuple):
