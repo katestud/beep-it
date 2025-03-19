@@ -4,7 +4,7 @@ import time
 from imu import MPU6050
 import math
 import random
-from tones import TONES
+import sounds
 
 # Pin Definitions
 TOUCH_PIN = 15
@@ -40,7 +40,7 @@ SLIDER_PARTIAL_THRESHOLD = 500  # Minimum change for partial slide
 SLIDER_MIN_MOVEMENT = 100  # Minimum movement in one direction to count
 
 class GameAction:
-    TOUCH = "Touch it!"
+    TOUCH = "Beep it!"
     FLICK = "Flick it!"
     SHAKE = "Shake it!"
     SLIDE = "Slide it!"
@@ -68,7 +68,7 @@ class GameState:
         self.score = 0
         self.last_action_time = time.time()
         self.current_action = None
-        print("\nWelcome to Bop It!")
+        print("\nWelcome to Beep It!")
         print("Follow the prompts!")
         self.generate_new_action()
 
@@ -88,9 +88,11 @@ class GameState:
         self.last_prompt_time = time.time()
         # Reset debounce timers when generating a new action
         if self.input_manager:
+            sounds.playsong(self.input_manager.buzzer, self.current_action)
             self.input_manager.lcd_display.clear()
             self.input_manager.lcd_display.putstr(self.current_action)
             self.input_manager.reset_debounce_timers()
+
 
     def check_action(self, action_type):
         if not self.current_action:
@@ -116,6 +118,8 @@ class GameState:
 
     def handle_wrong_action(self, action):
         print(f"Wrong action: {action}! Try again!")
+        if self.input_manager:
+            sounds.playsong(self.input_manager.buzzer, "FAILURE")
 class InputManager:
     def __init__(self):
         # Touch Sensor Setup
@@ -283,22 +287,6 @@ class InputManager:
 
         return False, current_value
 
-def playtone(buzzer, frequency):
-    buzzer.duty_u16(1000)
-    buzzer.freq(frequency)
-
-def bequiet(buzzer):
-    buzzer.duty_u16(0)
-
-def playsong(buzzer, song):
-    for i in range(len(song)):
-      if (song[i] == "P"):
-          bequiet(buzzer)
-      else:
-          playtone(buzzer, TONES[song[i]])
-      time.sleep(0.3)
-      bequiet(buzzer)
-
 
 def main():
     game_state = GameState()
@@ -322,10 +310,7 @@ def main():
         print("No I2C0 devices found")
 
     input_manager.lcd_display.backlight_on()
-    input_manager.lcd_display.putstr("Bop It! Press to start")
-    song = ["E4", "G4", "C5", "D5", "E5", "G5", "E5", "C5", "A4"]
-
-    playsong(input_manager.buzzer, song)
+    input_manager.lcd_display.putstr("Beep It! Beep to start")
 
     while True:
         # Simple state machine for game on/off
@@ -335,6 +320,7 @@ def main():
                 print("Starting game!")
                 input_manager.lcd_display.clear()
                 input_manager.lcd_display.putstr("Starting game!")
+                sounds.playsong(input_manager.buzzer, "GAME_START")
                 game_state.start_game()
             time.sleep(1)
             continue
