@@ -36,8 +36,6 @@ PROTOTYPE_MODE = False
 
 # Slider settings
 SLIDER_THRESHOLD = 1000  # Minimum change to detect movement
-SLIDER_PARTIAL_THRESHOLD = 500  # Minimum change for partial slide
-SLIDER_MIN_MOVEMENT = 100  # Minimum movement in one direction to count
 
 class GameAction:
     TOUCH = "BEEP IT!"
@@ -161,8 +159,6 @@ class InputManager:
         self.slider_value = self.slider_sensor.read_u16()
         self.last_slider_time = 0
         self.slider_detected = False
-        self.slider_direction = 0  # 1 for right, -1 for left
-        self.slider_cumulative = 0  # Track cumulative movement
         if DEBUG:
             print(f"Initial slider value: {self.slider_value}")
 
@@ -176,8 +172,6 @@ class InputManager:
         self.shake_detected = False
         self.joystick_detected = False
         self.slider_detected = False
-        self.slider_direction = 0
-        self.slider_cumulative = 0
         # Update all sensor values to prevent false triggers
         self.slider_value = self.slider_sensor.read_u16()
         self.joystick_x_position = self.vrx.read_u16()
@@ -247,51 +241,15 @@ class InputManager:
         current_value = self.slider_sensor.read_u16()
         diff = current_value - self.slider_value
 
-        # Determine direction of movement
-        if diff > SLIDER_MIN_MOVEMENT:
-            direction = 1  # Moving right
-        elif diff < -SLIDER_MIN_MOVEMENT:
-            direction = -1  # Moving left
-        else:
-            direction = 0  # No significant movement
-
-        # Update cumulative movement if moving in the same direction
-        if direction != 0:
-            if direction == self.slider_direction:
-                self.slider_cumulative += abs(diff)
-            else:
-                self.slider_cumulative = abs(diff)
-            self.slider_direction = direction
-        else:
-            self.slider_direction = 0
-
         # Only print debug info if we're expecting a slide action
         if DEBUG:
-            print(f"Slider current: {current_value}, last: {self.slider_value}, diff: {diff}, cumulative: {self.slider_cumulative}")
+            print(f"Slider current: {current_value}, last: {self.slider_value}, diff: {diff}")
 
-        # Check for full slide
         if abs(diff) > threshold and not self.slider_detected:
-            if DEBUG:
-                print(f"Full slider movement detected! Threshold: {threshold}")
             self.slider_value = current_value
             self.last_slider_time = current_time
             self.slider_detected = True
-            self.slider_cumulative = 0
             return True, current_value
-        # Check for partial slide
-        elif self.slider_cumulative > SLIDER_PARTIAL_THRESHOLD and not self.slider_detected:
-            if DEBUG:
-                print(f"Partial slider movement detected! Cumulative: {self.slider_cumulative}")
-            self.slider_value = current_value
-            self.last_slider_time = current_time
-            self.slider_detected = True
-            self.slider_cumulative = 0
-            return True, current_value
-        # Reset if movement stops or changes direction
-        elif abs(diff) <= SLIDER_MIN_MOVEMENT:
-            self.slider_detected = False
-            self.slider_cumulative = 0
-            self.slider_direction = 0
 
         return False, current_value
 
