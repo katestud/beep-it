@@ -202,16 +202,20 @@ class InputManager:
         zAccel = self.mpu_sensor.accel.z
         accel_magnitude = math.sqrt(xAccel**2 + yAccel**2 + zAccel**2)
 
+        if DEBUG:
+            print(f"Accel magnitude: {accel_magnitude}, Threshold: {threshold}")
+
         if accel_magnitude > threshold and not self.shake_detected:
             self.last_shake_time = current_time
             self.shake_detected = True
+            print("Shake detected in is_shaking method!")  # Debug print
             return True
         elif accel_magnitude <= threshold:
             self.shake_detected = False
 
         return False
 
-    def is_joystick_moved(self, threshold=1000):
+    def is_joystick_moved(self):
         current_time = time.time()
         if current_time - self.last_joystick_time < JOYSTICK_DEBOUNCE:
             return False, self.joystick_x_position, self.joystick_y_position
@@ -219,8 +223,12 @@ class InputManager:
         x_axis = self.vrx.read_u16()
         y_axis = self.vry.read_u16()
 
-        x_moved = abs(x_axis - self.joystick_x_position) > threshold
-        y_moved = abs(y_axis - self.joystick_y_position) > threshold
+        # This isn't necessarily the ideal implementation, but the
+        # joystick got messed up when attaching it to the game and now it
+        # doesn't always read a consistent value even when not activated. So,
+        # instead we want to detect if it's really been flicked.
+        x_moved = x_axis < 2000 or x_axis > 55000
+        y_moved = y_axis < 2000 or y_axis > 55000
 
         if (x_moved or y_moved) and not self.joystick_detected:
             self.joystick_x_position = x_axis
@@ -299,19 +307,19 @@ def main():
             game_state.generate_new_action()
 
         # Check inputs and validate against current action
-        if input_manager.is_touched():
-            print("Touch detected!")
-            if game_state.check_action(GameAction.TOUCH):
-                game_state.handle_correct_action()
-            else:
-                game_state.handle_wrong_action("touch")
-
         if input_manager.is_shaking():
             print("Shake detected!")
             if game_state.check_action(GameAction.SHAKE):
                 game_state.handle_correct_action()
             else:
                 game_state.handle_wrong_action("shake")
+
+        if input_manager.is_touched():
+            print("Touch detected!")
+            if game_state.check_action(GameAction.TOUCH):
+                game_state.handle_correct_action()
+            else:
+                game_state.handle_wrong_action("touch")
 
         joystick_moved, x_axis, y_axis = input_manager.is_joystick_moved()
         if joystick_moved:
