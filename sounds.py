@@ -1,8 +1,5 @@
 import time
 
-# For when working in public space
-DISABLE_SOUND = True
-
 TONES = {
   "B0": 31,
   "C1": 33,
@@ -127,8 +124,6 @@ def bequiet(buzzer):
     buzzer.duty_u16(0)
 
 def playsong(buzzer, song_name):
-    if DISABLE_SOUND:
-        return
     song = INSTRUCTION_TONES[song_name]
     for note in song:
         if isinstance(note, tuple):

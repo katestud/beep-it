@@ -31,7 +31,7 @@ JOYSTICK_DEBOUNCE = 0.4
 # Debug mode
 DEBUG = False
 
-# Prototype mode (when shake doesn't really work)
+# Prototype mode (when shake doesn't really work, don't prompt for it)
 PROTOTYPE_MODE = False
 
 # Slider settings
@@ -267,7 +267,7 @@ def main():
     input_manager = InputManager()
     game_state.input_manager = input_manager  # type: ignore
 
-    time.sleep(2)
+    time.sleep(1)
 
     # Debug I2C devices
     print("Scanning for I2C devices...")
@@ -284,16 +284,16 @@ def main():
         print("No I2C0 devices found")
 
     input_manager.lcd_display.backlight_on()
-    input_manager.lcd_display.putstr("Beep It! Beep to start")
+    input_manager.lcd_display.putstr("BEEP TO START")
 
     while True:
         # Simple state machine for game on/off
         if not game_state.is_game_on:
             # Check for game start condition (placeholder)
             if input_manager.is_touched():
-                print("Starting game!")
+                print("STARTING GAME")
                 input_manager.lcd_display.clear()
-                input_manager.lcd_display.putstr("Starting game!")
+                input_manager.lcd_display.putstr("STARTING GAME")
                 sounds.playsong(input_manager.buzzer, "GAME_START")
                 game_state.start_game()
             time.sleep(1)
